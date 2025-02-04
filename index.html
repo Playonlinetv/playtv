@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play.TV - Señales en Vivo</title>
+    <script src="https://cdn.jsdelivr.net/npm/video.js@7.20.3/dist/video.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/video.js@7.20.3/dist/video-js.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .initial-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #0a0a0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #1a1a1a;
+            border-top: 5px solid #ff0000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .initial-loading-text {
+            color: white;
+            font-size: 1.5rem;
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #main-content {
+            display: none;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(0,0,0,0.5);
+            margin-bottom: 1rem;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #ff0000;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo:hover {
+            color: #ff3333;
+        }
+
+        .download-btn {
+            background: #ff0000;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .download-btn:hover {
+            background: #ff3333;
+            transform: translateY(-2px);
+        }
+
+        .video-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto 2rem auto;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            padding: 1rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .channel-card {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #1a1a1a;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            aspect-ratio: 16/9;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255,0,0,0.2);
+        }
+
+        .channel-card.active {
+            border: 2px solid #ff0000;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255,0,0,0.3);
+        }
+
+        .channel-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: all 0.3s ease;
+        }
+
+        .channel-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .live-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: #ff0000;
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(255,0,0,0.3);
+        }
+
+        .channel-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 0.8rem;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
+        }
+
+        .channel-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 0.3rem;
+            text-align: center;
+        }
+
+        .channel-viewers {
+            font-size: 0.7rem;
+            color: #ccc;
+            text-align: center;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 1.2rem;
+            margin-top: 1rem;
+        }
+
+        .countdown {
+            color: #0088cc;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
+        }
+
+        .join-group-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #0088cc;
+            padding: 12px 24px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 136, 204, 0.3);
+            animation: pulse 2s infinite;
+            transition: all 0.3s ease;
+            z-index: 100;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .join-group-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 136, 204, 0.4);
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(0, 136, 204, 0.3);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 8px 25px rgba(0, 136, 204, 0.4);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(0, 136, 204, 0.3);
+            }
+        }
+
+        /* Estilos adicionales para Video.js */
+        .video-js {
+            width: 100%;
+            height: 100%;
+        }
+
+        .video-js .vjs-big-play-button {
+            background-color: rgba(255, 0, 0, 0.7);
+            border-color: rgba(255, 0, 0, 0.7);
+            transition: all 0.3s ease;
+        }
+
+        .video-js:hover .vjs-big-play-button {
+            background-color: rgba(255, 0, 0, 0.9);
+        }
+
+        .video-js .vjs-control-bar {
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+        }
+
+        .video-js .vjs-volume-panel,
+        .video-js .vjs-play-control,
+        .video-js .vjs-fullscreen-control {
+            color: white;
+        }
+
+        .video-js.vjs-theme-custom {
+            color: white;
+        }
+
+        .video-js.vjs-theme-custom .vjs-big-play-button {
+            background-color: rgba(255, 0, 0, 0.7);
+            border-color: transparent;
+        }
+
+        .video-js.vjs-theme-custom .vjs-control-bar {
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+        }
+
+        .video-js.vjs-theme-custom .vjs-slider {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .video-js.vjs-theme-custom .vjs-play-progress {
+            background-color: #ff0000;
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                padding: 1rem;
+            }
+
+            .logo {
+                font-size: 1.5rem;
+            }
+
+            .download-btn {
+                font-size: 0.8rem;
+                padding: 0.5rem 1rem;
+            }
+
+            .channels-grid {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 0.5rem;
+                gap: 0.8rem;
+            }
+
+            .channel-title {
+                font-size: 0.8rem;
+            }
+
+            .channel-viewers {
+                font-size: 0.6rem;
+            }
+
+            .join-group-btn {
+                bottom: 20px;
+                right: 20px;
+                padding: 10px 20px;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="initial-loading" id="initial-loading">
+        <div class="loading-spinner"></div>
+        <div class="initial-loading-text">Cargando Play.TV...</div>
+    </div>
+
+    <div id="main-content">
+        <header class="header">
+            <a href="#" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Play.TV
+            </a>
+            <a href="#" class="download-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Descargar App
+            </a>
+        </header>
+
+        <div id="mainPlayer" class="video-container">
+            <div style="text-align: center; padding: 20px; color: #666;">
+                Selecciona una señal para comenzar
+            </div>
+        </div>
+
+        <div class="channels-grid">
+            <div class="channel-card" data-channel="Canal Principal" data-stream="https://362a33c2a385d7d1e52d89d157b8d9ceaa1a98dd.cdn.broadpeak.io/out/v1/27a009aa04ac46ff9d4dcc1a036b0835/index.mpd">
+                <span class="live-badge">En vivo</span>
+                <img src="https://unity-img.tbxapis.com/v0/images/801ca66694329da3ba697f38c94bf0a1/content/679294a1e080cf592668a770/3aa5bf9b62889f5464e0bb775508d3b2/img.jpg?crop=resizeScaleAndCrop&size=THUMB" alt="Canal Principal">
+                <div class="channel-info">
+                    <div class="channel-title">CASA EN VIVO </div>
+                    <div class="channel-viewers">12.5K espectadores</div>
+                </div>
+            </div>
+
+            <div class="channel-card" data-channel="Noticias" data-stream="https://362a33c2a385d7d1e52d89d12b4226dd7ed6eb2d.cdn.broadpeak.io/out/v1/a8aee35816a049c3bd3d925448e79e39/index.mpd
+">
+                <span class="live-badge">En vivo</span>
+                <img src="https://unity-img.tbxapis.com/v0/images/801ca66694329da3ba697f38c94bf0a1/content/679295f1f5f47df244d76565/e59cc4f4caa4e462e6e02af999fd2cc3/img.jpg?crop=resizeScaleAndCrop&size=THUMB" alt="Noticias">
+                <div class="channel-info">
+                    <div class="channel-title">COMEDOR</div>
+                    <div class="channel-viewers">2K espectadores</div>
+                </div>
+            </div>
+
+            <div class="channel-card" data-channel="LOFT" data-stream="https://362a33c2a385d7d1e52d89d12b4226dd7ed6eb2d.cdn.broadpeak.io/out/v1/b29051a7961e4a2aaeb7ae180f703190/index.mpd">
+                <span class="live-badge">En vivo</span>
+                <img src="https://unity-img.tbxapis.com/v0/images/801ca66694329da3ba697f38c94bf0a1/content/6792a4b4f5f47d0011d766d9/66416775f45ec797bc8fc60f6e348f35/img.jpg?crop=resizeScaleAndCrop&size=THUMB" alt="Loft">
+                <div class="channel-info">
+                    <div class="channel-title">HABITACION AGUA </div>
+                    <div class="channel-viewers">7K espectadores</div>
+                </div>
+            </div>
+
+            <div class="channel-card" data-channel="COMEDOR" data-stream="https://362a33c2a385d7d1e52d89d12b4226dd7ed6eb2d.cdn.broadpeak.io/out/v1/326defce34314e109ffa007eae1d35e3/index.mpd">
+                <span class="live-badge">En vivo</span>
+                <img src="https://unity-img.tbxapis.com/v0/images/801ca66694329da3ba697f38c94bf0a1/content/6792a5afabfca27e05f3f09a/d5f324ac689ba2681319ceaf9bcc8c38/img.jpg?crop=resizeScaleAndCrop&size=THUMB" alt="Comedor">
+                <div class="channel-info">
+                    <div class="channel-title">HABITACION FUEGO</div>
+                    <div class="channel-viewers">4.9K espectadores</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading-overlay">
+            <div class="loading-text">Preparando redirección al grupo...</div>
+            <div class="countdown">10</div>
+        </div>
+
+        <div class="join-group-btn" onclick="handleTelegramClick()">
+            Unirte al grupo
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/dashjs/dist/dash.all.min.js"></script>
+    <script>
+        // Función para mostrar el contenido principal
+        function showMainContent() {
+            document.getElementById('initial-loading').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+        }
+
+        // Esperar 15 segundos antes de mostrar el contenido
+        window.addEventListener('load', () => {
+            setTimeout(showMainContent, 1000);
+        });
+
+        // Variable global para el reproductor
+        let currentPlayer = null;
+
+        function changeChannel(channelName, streamUrl
+                               
+                               ) {
+            const player = document.getElementById('mainPlayer');
+            const allCards = document.querySelectorAll('.channel-card');
+            
+            // Limpiar reproductor anterior si existe
+            if (currentPlayer) {
+                currentPlayer.dispose();
+            }
+
+            // Actualizar estado de las tarjetas
+            allCards.forEach(card => {
+                if (card.querySelector('.channel-title').textContent === channelName) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+
+            // Crear nuevo contenedor de video
+            player.innerHTML = `
+                <video 
+                    id="my-video" 
+                    class="video-js vjs-theme-custom" 
+                    controls 
+                    preload="auto" 
+                    width="100%" 
+                    height="100%"
+                    data-setup='{}'
+                >
+                    <source 
+                        src="${streamUrl}" 
+                        type="application/dash+xml"
+                    >
+                </video>
+            `;
+
+            // Inicializar nuevo reproductor
+            currentPlayer = videojs('my-video', {
+                fluid: true,
+                aspectRatio: '16:9',
+                controlBar: {
+                    children: [
+                        'playToggle',
+                        'volumePanel',
+                        'progressControl',
+                        'fullscreenToggle',
+                        'currentTimeDisplay',
+                        'timeDivider',
+                        'durationDisplay'
+                    ]
+                },
+                userActions: {
+                    hotkeys: function(event) {
+                        switch(event.which) {
+                            case 32: // Espacio: play/pause
+                                if (this.paused()) {
+                                    this.play();
+                                } else {
+                                    this.pause();
+                                }
+                                break;
+                            case 70: // F: fullscreen
+                                if (!this.isFullscreen()) {
+                                    this.requestFullscreen();
+                                } else {
+                                    this.exitFullscreen();
+                                }
+                                break;
+                        }
+                    }
+                }
+            });
+
+            // Reproducción automática
+            currentPlayer.ready(function() {
+                currentPlayer.play();
+            });
+        }
+
+        // Event listeners para las tarjetas de canal
+        document.querySelectorAll('.channel-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const channelName = card.querySelector('.channel-title').textContent;
+                const streamUrl = card.getAttribute('data-stream');
+                changeChannel(channelName, streamUrl);
+            });
+        });
+
+        function handleTelegramClick() {
+            const overlay = document.querySelector('.loading-overlay');
+            const countdownElement = document.querySelector('.countdown');
+            overlay.style.display = 'flex';
+            
+            let seconds = 10;
+            const countdownInterval = setInterval(() => {
+                seconds--;
+                countdownElement.textContent = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = 'https://t.me/playtvvip'; // Reemplaza con tu link real
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
